@@ -1,0 +1,90 @@
+services:
+  api-gateway:
+    image: nginx:alpine
+    container_name: api-gateway
+    depends_on:
+      - auth-service
+      - acad-service
+    ports:
+      - "8081:80"
+
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - microservices-network
+
+  auth-service:
+    build: ./auth-service
+    container_name: auth-service
+    depends_on:
+      - auth-db
+    environment:
+      NODE_ENV: development
+      PORT: "3001"
+      MONGO_URI: mongodb://auth-db:27017/auth
+      JWT_SECRET: "ISI_DARI_JWTSECRETS_COM"
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./auth-service:/app
+      - /app/node_modules
+    networks:
+      - microservices-network
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+  auth-db:
+    image: mongo:6.0
+    container_name: auth-db
+    restart: unless-stopped
+    volumes:
+      - auth-data:/data/db
+    networks:
+      - microservices-network
+
+  acad-db:
+    image: postgres:16-alpine
+    container_name: acad-db
+    environment:
+      POSTGRES_DB: products
+      POSTGRES_USER: productuser
+      POSTGRES_PASSWORD: productpass
+    ports:
+      - "5432:5432"
+    volumes:
+      - acad-data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - microservices-network
+
+  acad-service:
+    build: ./acad-service
+    container_name: acad-service
+    depends_on:
+      - acad-db
+    environment:
+      PORT: "3002"
+      DB_HOST: acad-db
+      DB_PORT: "5432"
+      DB_NAME: products
+      DB_USER: productuser
+      DB_PASSWORD: productpass
+    ports:
+      - "3002:3002"
+    networks:
+      - microservices-network
+
+networks:
+  microservices-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.16.0.0/28
+
+
+volumes:
+  auth-data:
+  acad-data:
